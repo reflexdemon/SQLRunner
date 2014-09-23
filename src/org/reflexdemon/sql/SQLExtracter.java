@@ -1,4 +1,5 @@
 package org.reflexdemon.sql;
+
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -30,11 +31,14 @@ public class SQLExtracter {
 
     static String driver = "oracle.jdbc.driver.OracleDriver";
 
-    static String usage = "SQLRunner2 [-d driver] [-x] [--dryrun] [-o outfile] -c url -u user -p pass <input file> \n"
+    static String usage = "SQLRunner2 [-d driver] [-x] [--dryrun] [-o outfile] -c url -u user -p pass -t tableName -f additionalFilter -i keyColumn <input file> \n"
             + "    where\n"
             + " -x: continue on error.  default (no arg) WILL fail on error.\n"
-            + " --dryrun: don't execute anything.  just connect to the DB, and log."
-            + " -o: redirect resultset to file; defaults to '/tmp/output.txt'"
+            + " --dryrun: don't execute anything.  just connect to the DB, and log.\n"
+            + " -o: redirect resultset to file; defaults to '/tmp/output.txt'\n"
+            + " -t: table or view name\n"
+            + " -f: Additional filter like 'KEY is NOT NULL'\n"
+            + " -i: Primary filter column used for IN operator like 'ID'\n"
             + " -l: Number of accounts to fetch in single shot; defaults to '100'";
 
     static boolean failonerror = false;
@@ -50,34 +54,39 @@ public class SQLExtracter {
         String user = ap.getStringArg("-u");
         String pass = ap.getStringArg("-p");
         String output = ap.getStringArg("-o", "/tmp/output.txt");
-        int limit=ap.getIntArg("-l", 100);
+        int limit = ap.getIntArg("-l", 100);
         driver = ap.getStringArg("-d", driver);
-        
-        
-        
+
+        String table = ap.getStringArg("-t");// "V_RESOURCE"
+        String condition = ap.getStringArg("-f");// "RESOURCE_KEY IS NOT NULL";
+        String filterColumn = "ACCOUNT_NUMBER";
+        String mysql = "SELECT * from " + table + " WHERE 1=1 AND " + condition
+                + " AND " + filterColumn;
+
+        log.debug("SQL finally built :" + mysql);
 
         dryrun = ap.getBooleanArg("--dryrun", dryrun);
         failonerror = ap.getBooleanArg("-x", failonerror);
 
-        String sqlFile = ap.getLastArg();
+        String input = ap.getLastArg();
 
-        if (url == null || user == null || pass == null || sqlFile == null) {
+        if (url == null || user == null || pass == null || input == null) {
             System.out.println(usage);
             System.exit(1);
         }
 
-        String sql = StreamUtil.readToString(new File(sqlFile));
+        String sql = StreamUtil.readToString(new File(input));
 
-        log.debug("SQL File " + sqlFile + " has " + sql.split("\\\n").length
+        log.debug("SQL File " + input + " has " + sql.split("\\\n").length
                 + " lines.");
 
-//        String nocomment = stripSQLComments(sql);
+        // String nocomment = stripSQLComments(sql);
         String nocomment = sql;
 
         log.debug("SQL w/o Commeents has " + nocomment.split("\\\n").length
                 + " lines");
 
-        List<String> statements = splitSQL(nocomment, ";");
+        List<String> statements = splitSQL(nocomment, "\n");
         int scount = statements.size();
 
         log.debug("There are " + scount + " Accounts");
@@ -95,20 +104,19 @@ public class SQLExtracter {
         try {
             con = getConnection(driver, url, user, pass);
 
-            
             int max = statements.size();
             if (max < limit) {
-                limit = 1;//Increase by 1 will do
+                limit = 1;// Increase by 1 will do
             }
-            for (int i = 0; i < max; i+=limit) {
+            for (int i = 0; i < max; i += limit) {
                 StringBuilder builder = new StringBuilder();
                 int limitX = limit;
                 if ((i + limit) > max) {
-                    limitX = (i - max);//Safety for AIOB
+                    limitX = (max - i);// Safety for AIOB
                 }
                 String statement = getINStatement(statements, i, limitX);
-                String mysql = "SELECT * from V_RESOURCE WHERE RESOURCE_KEY IS NOT NULL AND ACCOUNT_NUMBER ";
-                statement = mysql + "IN " +  statement.trim();
+
+                statement = mysql + " IN " + statement.trim();
 
                 log.debug("Executing  [" + i + "] \n" + statement); // "\n-------------------------------");
 
@@ -117,24 +125,24 @@ public class SQLExtracter {
                 try {
                     state = con.createStatement();
 
-                    
                     ResultSet rs = null;
                     if (!dryrun) {
                         attempted++;
-                        
+
                         rs = state.executeQuery(statement);
                         int columns = rs.getMetaData().getColumnCount();
                         rows = 0;
                         while (rs.next()) {
                             rows++;
                             String line = getDelimitedLine(rs, "|", columns);
-//                            log.debug("line" + line);
+                            // log.debug("line" + line);
                             builder.append(line).append("\n");
                         }
-                        
+
                         File outFile = new File(output);
-                        StreamUtil.write(builder.toString().getBytes(), outFile);
-                        
+                        StreamUtil
+                                .write(builder.toString().getBytes(), outFile);
+
                     }
 
                     totalrows = totalrows + rows;
@@ -144,7 +152,7 @@ public class SQLExtracter {
                     log.debug("Finished [" + i + "], rows=" + rows + ", et="
                             + et + "ms");
                     success++;
-                    
+
                 } catch (SQLException ex) {
                     log.error("Error: " + ex);
                     fail++;
@@ -163,34 +171,41 @@ public class SQLExtracter {
 
         } finally {
             DBUtils.close(con, state, null);
-            StringBuilder builder = new StringBuilder();
 
-            builder.append("\n");
-            builder.append("==========================================").append("\n");
-            builder.append("   Executed " + attempted + " of " + scount
-                    + " statements.").append("\n");
-            builder.append("      Success: " + success).append("\n");
-            builder.append("      Fail   : " + fail).append("\n");
-            builder.append("      Empty  : " + empty).append("\n");
+            System.out.println("\n");
+            System.out.println("==========================================");
+            System.out.println("   Executed " + attempted + " of " + scount
+                    + " statements.");
+            System.out.println("      Success: " + success);
+            System.out.println("      Fail   : " + fail);
+            System.out.println("      Empty  : " + empty);
 
-            builder.append("   Total ET: "
+            System.out.println("   Total ET: "
                     + TimeUtil.formatElapsedTime(System.currentTimeMillis()
-                            - overallStart)).append("\n");
-            builder.append("   Total rows: " + totalrows).append("\n");
-            builder.append("==========================================").append("\n");
-            builder.append(StreamUtil.readToString(new File(output))).append("\n");
-            String sendHTML = null;
-            String sendText = builder.toString();
-            String[] emailAddrs = { "venkateswara.venkatraman@cbeyond.net"};
-            String subject = "V_RESOURCE Extract";
-            SendEmail.send(sendHTML, sendText, emailAddrs, subject);
+                            - overallStart));
+            System.out.println("   Total rows: " + totalrows);
+            System.out.println("==========================================");
         }
 
     }
 
-    private static String getDelimitedLine(ResultSet rs, String delimiter, int columns) throws SQLException {
+    /**
+     * Gets the delimited line.
+     * 
+     * @param rs
+     *            the rs
+     * @param delimiter
+     *            the delimiter
+     * @param columns
+     *            the columns
+     * @return the delimited line
+     * @throws SQLException
+     *             the SQL exception
+     */
+    private static String getDelimitedLine(ResultSet rs, String delimiter,
+            int columns) throws SQLException {
         StringBuilder builder = new StringBuilder();
-        for (int i=1; i<= columns; i++) {
+        for (int i = 1; i <= columns; i++) {
             builder.append(rs.getString(i));
             if (i < columns) {
                 builder.append("|");
@@ -199,14 +214,27 @@ public class SQLExtracter {
         return builder.toString();
     }
 
+    /**
+     * Gets the IN statement.
+     * 
+     * @param statements
+     *            the statements
+     * @param start
+     *            the start
+     * @param limit
+     *            the limit
+     * @return the IN statement
+     */
     private static String getINStatement(List<String> statements, int start,
             int limit) {
         StringBuilder builder = new StringBuilder();
+//        log.debug("Start:" + start + ", Limit:" + limit);
+        int maxLoop = (start + limit);
+        log.debug("List Count " + (maxLoop - start));
         builder.append("(");
-        int maxLoop = (start+limit);
-        for (int i=start; i< maxLoop; i++ ) {
+        for (int i = start; i < maxLoop; i++) {
             builder.append("\'").append(statements.get(i).trim()).append("\'");
-            if ( (i+1) != maxLoop) {
+            if ((i + 1) != maxLoop) {
                 builder.append(",");
             }
         }
