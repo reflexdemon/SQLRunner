@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Remote ssh" default="dist">
+	<!--
+		Load Build Configuration
+	-->
+	<property file="build.properties" />
+
+	<!--
+		Setting Application Classpath
+	-->
+	<path id="class.path">
+		<pathelement location="${lib.dir}/commons-logging.jar" />
+		<pathelement location="${lib.dir}/commons-codec.jar" />
+		<pathelement location="${lib.dir}/log4j.jar" />
+		<pathelement location="${lib.dir}/commons-lang3.jar" />
+		<pathelement location="${lib.dir}/commons-io.jar" />
+		<pathelement location="${lib.dir}/eproperties.jar" />
+		<pathelement location="${lib.dir}/commons-dbcp.jar" />
+		<pathelement location="${lib.dir}/ojdbc14.jar" />
+		<pathelement location="${lib.dir}/mailapi.jar" />
+		<pathelement location="${lib.dir}/smtp.jar" />
+		<pathelement location="${lib.dir}/commons-pool.jar" />
+	</path>
+	<!--
+		Target to delete all output directory
+	-->
+	<target name="clean">
+		<delete dir="${classes.dir}" />
+		<delete dir="${jar.dir}" />
+		<delete dir="${dist.dir}" />
+		<delete dir="${tmp.dir}" />
+
+	</target>
+
+	<!--
+		Compiles the sources using classpath
+	-->
+	<target name="compile" depends="clean">
+		<mkdir dir="${classes.dir}" />
+		<javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="class.path" debug="on" debuglevel="source,lines,vars" />
+		<copy todir="${classes.dir}">
+			<fileset dir="${src.dir}" excludes="**/*.java" />
+		</copy>
+	</target>
+	<!--
+		Build the jar file for execution
+	-->
+	<target name="jar" depends="compile">
+		<mkdir dir="${jar.dir}" />
+		<jar destfile="${jar.dir}/${app.unix.name}${app.version}.jar">
+			<fileset dir="${classes.dir}" />
+			<restrict>
+				<name name="**/*.*" />
+				<archives>
+					<zips>
+						<fileset dir="${lib.dir}">
+							<include name="*.jar" />
+						</fileset>
+					</zips>
+				</archives>
+			</restrict>
+			<manifest>
+				<attribute name="Main-Class" value="${Main-Class}" />
+				<attribute name="Built-By" value="${user.name}" />
+				<attribute name="Project-Name" value="${app.name} ${app.version}" />
+			</manifest>
+		</jar>
+	</target>
+
+
+	<!--
+		Prepare distribution packages
+	-->
+	<target name="dist" depends="jar">
+		<copy todir="${tmp.dir}">
+			<fileset dir="${jar.dir}">
+				<include name="*.jar" />
+			</fileset>
+			<fileset dir=".">
+				<include name="remote.*" />
+			</fileset>
+		</copy>
+		<zip destfile="${dist.dir}/${app.unix.name}${app.version}-bin.zip">
+			<fileset dir="${tmp.dir}" includes="**/*.*" />
+		</zip>
+		<zip destfile="${dist.dir}/${app.unix.name}${app.version}-src.zip">
+			<fileset dir="${src.dir}" includes="**/*.*" />
+			<fileset dir="." includes="build.*" />
+			<fileset dir=".">
+				<include name="remote.bat" />
+			</fileset>
+		</zip>
+	</target>
+
+	<!--
+		Run the application jar
+	-->
+	<target name="run">
+		<java jar="${jar.dir}/${app.unix.name}${app.version}.jar" failonerror="true" fork="true">
+			<arg value="-h" />
+			<arg value="cbolw01btst.dev.cbeyond.net" />
+			<arg value="-c" />
+			<arg value="tail -f /oss/bsimple/logs/cbo10/cbo10-tomcat.log" />
+			<arg value="-u" />
+			<arg value="vvenkatraman" />
+		</java>
+	</target>
+</project>
