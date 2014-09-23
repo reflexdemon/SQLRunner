@@ -25,20 +25,19 @@ import org.reflexdemon.util.TimeUtil;
  * 
  * 
  */
-public class SQLExtracter {
-    static Log log = LogFactory.getLog(SQLExtracter.class);
+public class QueryExtracter {
+    static Log log = LogFactory.getLog(QueryExtracter.class);
 
     static String driver = "oracle.jdbc.driver.OracleDriver";
 
-    static String usage = "SQLExtracter [-d driver] [-x] [--dryrun] [-o outfile] -c url -u user -p pass -t tableName -f additionalFilter -i keyColumn <input file> \n"
+    static String usage = "QueryExtracter [-d driver] [-x] [--dryrun] [-o outfile] -c url -u user -p pass -t tableName -f additionalFilter \n"
             + "    where\n"
             + " -x: continue on error.  default (no arg) WILL fail on error.\n"
             + " --dryrun: don't execute anything.  just connect to the DB, and log.\n"
             + " -o: redirect resultset to file; defaults to '/tmp/output.txt'\n"
             + " -t: table or view name\n"
-            + " -f: Additional filter like 'KEY is NOT NULL'\n"
-            + " -i: Primary filter column used for IN operator like 'ID'\n"
-            + " -l: Number of accounts to fetch in single shot; defaults to '100'";
+            + " --fields: Viewable Fields, defaults to '*'\n"
+            + " -f: Additional filter like 'KEY is NOT NULL'\n";
 
     static boolean failonerror = false;
     static boolean dryrun = false;
@@ -52,43 +51,25 @@ public class SQLExtracter {
         String url = ap.getStringArg("-c");
         String user = ap.getStringArg("-u");
         String pass = ap.getStringArg("-p");
+        String fields = ap.getStringArg("--fields", "*");
         String output = ap.getStringArg("-o", "/tmp/output.txt");
-        int limit = ap.getIntArg("-l", 100);
+
         driver = ap.getStringArg("-d", driver);
 
         String table = ap.getStringArg("-t");// "V_RESOURCE"
         String condition = ap.getStringArg("-f");// "RESOURCE_KEY IS NOT NULL";
-        String filterColumn = ap.getStringArg("-i");//"ACCOUNT_NUMBER";
-        String mysql = "SELECT * from " + table + " WHERE 1=1 AND " + condition
-                + " " + filterColumn;
+        String mysql = "SELECT " + fields + " from " + table + " WHERE 1=1 "
+                + condition;
 
         log.debug("SQL finally built :" + mysql);
 
         dryrun = ap.getBooleanArg("--dryrun", dryrun);
         failonerror = ap.getBooleanArg("-x", failonerror);
 
-        String input = ap.getLastArg();
-
-        if (url == null || user == null || pass == null || input == null) {
+        if (url == null || user == null || pass == null || table == null) {
             System.out.println(usage);
             System.exit(1);
         }
-
-        String sql = StreamUtil.readToString(new File(input));
-
-        log.debug("SQL File " + input + " has " + sql.split("\\\n").length
-                + " lines.");
-
-        // String nocomment = stripSQLComments(sql);
-        String nocomment = sql;
-
-        log.debug("SQL w/o Commeents has " + nocomment.split("\\\n").length
-                + " lines");
-
-        List<String> statements = splitSQL(nocomment, "\n");
-        int scount = statements.size();
-
-        log.debug("There are " + scount + " Accounts");
 
         Connection con = null;
         Statement state = null;
@@ -97,75 +78,58 @@ public class SQLExtracter {
         int fail = 0;
         int empty = 0;
 
-        int attempted = 0;
-
         long overallStart = System.currentTimeMillis();
         try {
             con = getConnection(driver, url, user, pass);
 
-            int max = statements.size();
-            if (max < limit) {
-                limit = 1;// Increase by 1 will do
-            }
-            for (int i = 0; i < max; i += limit) {
-                StringBuilder builder = new StringBuilder();
-                int limitX = limit;
-                if ((i + limit) > max) {
-                    limitX = (max - i);// Safety for AIOB
-                }
-                String statement = getINStatement(statements, i, limitX);
+            StringBuilder builder = new StringBuilder();
 
-                statement = mysql + " IN " + statement.trim();
+            String statement = mysql;
 
-                log.debug("Executing  [" + i + "] \n" + statement); // "\n-------------------------------");
+            log.debug("Executing  \n" + statement); // "\n-------------------------------");
 
-                long start = System.currentTimeMillis();
-                int rows = 0;
-                try {
-                    state = con.createStatement();
+            long start = System.currentTimeMillis();
+            int rows = 0;
+            try {
+                state = con.createStatement();
 
-                    ResultSet rs = null;
-                    if (!dryrun) {
-                        attempted++;
+                ResultSet rs = null;
+                if (!dryrun) {
 
-                        rs = state.executeQuery(statement);
-                        int columns = rs.getMetaData().getColumnCount();
-                        rows = 0;
-                        while (rs.next()) {
-                            rows++;
-                            String line = getDelimitedLine(rs, "|", columns);
-                            // log.debug("line" + line);
-                            builder.append(line).append("\n");
-                        }
+                    rs = state.executeQuery(statement);
+                    int columns = rs.getMetaData().getColumnCount();
+                    rows = 0;
+                    while (rs.next()) {
+                        rows++;
+                        String line = getDelimitedLine(rs, "|", columns);
 
-                        File outFile = new File(output);
-                        StreamUtil
-                                .write(builder.toString().getBytes(), outFile);
-
+                        builder.append(line).append("\n");
                     }
 
-                    totalrows = totalrows + rows;
+                    File outFile = new File(output);
+                    StreamUtil.write(builder.toString().getBytes(), outFile);
 
-                    long et = System.currentTimeMillis() - start;
-
-                    log.debug("Finished [" + i + "], rows=" + rows + ", et="
-                            + et + "ms");
-                    success++;
-
-                } catch (SQLException ex) {
-                    log.error("Error: " + ex);
-                    fail++;
-
-                    if (failonerror) {
-                        throw new Error("Failed to execute statement " + i
-                                + " of " + scount);
-                    }
-                } finally {
-                    DBUtils.close(state);
-
-                    System.out
-                            .println("################################################");
                 }
+
+                totalrows = totalrows + rows;
+
+                long et = System.currentTimeMillis() - start;
+
+                log.debug("Finished, rows=" + rows + ", et=" + et + "ms");
+                success++;
+
+            } catch (SQLException ex) {
+                log.error("Error: " + ex);
+                fail++;
+
+                if (failonerror) {
+                    throw new Error("Failed to execute statement " + statement);
+                }
+            } finally {
+                DBUtils.close(state);
+
+                System.out
+                        .println("################################################");
             }
 
         } finally {
@@ -173,8 +137,6 @@ public class SQLExtracter {
 
             System.out.println("\n");
             System.out.println("==========================================");
-            System.out.println("   Executed " + attempted + " of " + scount
-                    + " statements.");
             System.out.println("      Success: " + success);
             System.out.println("      Fail   : " + fail);
             System.out.println("      Empty  : " + empty);
@@ -227,7 +189,7 @@ public class SQLExtracter {
     private static String getINStatement(List<String> statements, int start,
             int limit) {
         StringBuilder builder = new StringBuilder();
-//        log.debug("Start:" + start + ", Limit:" + limit);
+        // log.debug("Start:" + start + ", Limit:" + limit);
         int maxLoop = (start + limit);
         log.debug("List Count " + (maxLoop - start));
         builder.append("(");
