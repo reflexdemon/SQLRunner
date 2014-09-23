@@ -17,7 +17,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reflexdemon.util.DBUtils;
 import org.reflexdemon.util.Log4JLogConfig;
-import org.reflexdemon.util.SendEmail;
 import org.reflexdemon.util.StreamUtil;
 import org.reflexdemon.util.TimeUtil;
 
