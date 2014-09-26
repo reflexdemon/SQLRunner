@@ -15,12 +15,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import net.jmatrix.eproperties.EProperties;
 import net.jmatrix.eproperties.cli.ArgParser;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reflexdemon.util.DBUtils;
 import org.reflexdemon.util.Log4JLogConfig;
+import org.reflexdemon.util.PropertyLoader;
 import org.reflexdemon.util.StreamUtil;
 import org.reflexdemon.util.TimeUtil;
 
@@ -34,15 +36,11 @@ public class SQLExtracter {
 
     static String driver = "oracle.jdbc.driver.OracleDriver";
 
-    static String usage = "SQLExtracter [-d driver] [-x] [--dryrun] [-o outfile] -c url -u user -p pass -t tableName -f additionalFilter -i keyColumn <input file> \n"
+    static String usage = "SQLExtracter [-x] [--dryrun] config \n"
             + "    where\n"
             + " -x: continue on error.  default (no arg) WILL fail on error.\n"
             + " --dryrun: don't execute anything.  just connect to the DB, and log.\n"
-            + " -o: redirect resultset to file; defaults to '/tmp/output.txt'\n"
-            + " -t: table or view name\n"
-            + " -f: Additional filter like 'KEY is NOT NULL'\n"
-            + " -i: Primary filter column used for IN operator like 'ID'\n"
-            + " -l: Number of accounts to fetch in single shot; defaults to '100'";
+            + " config : property file";
 
     static boolean failonerror = false;
     static boolean dryrun = false;
@@ -50,29 +48,36 @@ public class SQLExtracter {
     /** */
     public static void main(String[] args) throws Exception {
         boolean headerAdded = false;
-        Log4JLogConfig.log4jBootstrap();
+        EProperties p = new EProperties();
 
         ArgParser ap = new ArgParser(args);
 
-        String url = ap.getStringArg("-c");
-        String user = ap.getStringArg("-u");
-        String pass = ap.getStringArg("-p");
-        String output = ap.getStringArg("-o", "/tmp/output.txt");
-        int limit = ap.getIntArg("-l", 100);
-        driver = ap.getStringArg("-d", driver);
-
-        String table = ap.getStringArg("-t");// "V_RESOURCE"
-        String condition = ap.getStringArg("-f");// "RESOURCE_KEY IS NOT NULL";
-        String filterColumn = ap.getStringArg("-i");//"ACCOUNT_NUMBER";
+        Log4JLogConfig.log4jBootstrap();
+        dryrun = ap.getBooleanArg("--dryrun", dryrun);
+        failonerror = ap.getBooleanArg("-x", failonerror);
+        
+        String config = ap.getLastArg();
+        p.load(config);
+        
+        String url = p.getString("jdbc.url");
+        String user = p.getString("jdbc.user");
+        String pass = p.getString("jdbc.pass");
+        int limit = p.getInt("jdbc.limit", 100);
+        driver = p.getString("jdbc.driver", driver);
+        
+        
+        String table = p.getString("sql.table");// "V_RESOURCE"
+        String condition = p.getString("sql.condition");// "RESOURCE_KEY IS NOT NULL";
+        String filterColumn = p.getString("sql.filterColumn");;//"ACCOUNT_NUMBER";
         String mysql = "SELECT * from " + table + " WHERE 1=1 AND " + condition
                 + " " + filterColumn;
 
         log.debug("SQL finally built :" + mysql);
 
-        dryrun = ap.getBooleanArg("--dryrun", dryrun);
-        failonerror = ap.getBooleanArg("-x", failonerror);
-
-        String input = ap.getLastArg();
+        
+        String input = p.getString("sql.input");
+        String output = p.getString("sql.output");
+        
 
         if (url == null || user == null || pass == null || input == null) {
             System.out.println(usage);
