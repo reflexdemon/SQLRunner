@@ -209,12 +209,14 @@ public final class StreamUtil
          if (fw != null) fw.close();
       }
    }
-   
    public static final int write(byte b[], File f) throws IOException {
+       return write(b, f, false);
+   }
+   public static final int write(byte b[], File f, boolean append) throws IOException {
       FileOutputStream fos=null;
       try
       {
-         fos = new FileOutputStream(f, true);
+         fos = new FileOutputStream(f, append);
          fos.write(b);
       }
       finally

@@ -4,10 +4,14 @@ import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,6 +49,7 @@ public class SQLExtracter {
 
     /** */
     public static void main(String[] args) throws Exception {
+        boolean headerAdded = false;
         Log4JLogConfig.log4jBootstrap();
 
         ArgParser ap = new ArgParser(args);
@@ -102,12 +107,13 @@ public class SQLExtracter {
         long overallStart = System.currentTimeMillis();
         try {
             con = getConnection(driver, url, user, pass);
-
             int max = statements.size();
             if (max < limit) {
                 limit = 1;// Increase by 1 will do
             }
+            File outFile = new File(output);
             for (int i = 0; i < max; i += limit) {
+                
                 StringBuilder builder = new StringBuilder();
                 int limitX = limit;
                 if ((i + limit) > max) {
@@ -122,6 +128,7 @@ public class SQLExtracter {
                 long start = System.currentTimeMillis();
                 int rows = 0;
                 try {
+                    
                     state = con.createStatement();
 
                     ResultSet rs = null;
@@ -130,17 +137,22 @@ public class SQLExtracter {
 
                         rs = state.executeQuery(statement);
                         int columns = rs.getMetaData().getColumnCount();
+                        if (!headerAdded) {
+                            headerAdded = !headerAdded;
+                            String header = getDelimitedHeaders(rs.getMetaData());
+                            StreamUtil.write(header.getBytes(), outFile);
+                        }
                         rows = 0;
                         while (rs.next()) {
                             rows++;
-                            String line = getDelimitedLine(rs, "|", columns);
+                            String line = getDelimitedData(rs, "|", columns);
                             // log.debug("line" + line);
                             builder.append(line).append("\n");
                         }
 
-                        File outFile = new File(output);
+
                         StreamUtil
-                                .write(builder.toString().getBytes(), outFile);
+                                .write(builder.toString().getBytes(), outFile, true);//Append
 
                     }
 
@@ -169,8 +181,7 @@ public class SQLExtracter {
             }
 
         } finally {
-            DBUtils.close(con, state, null);
-
+            DBUtils.close(con);
             System.out.println("\n");
             System.out.println("==========================================");
             System.out.println("   Executed " + attempted + " of " + scount
@@ -189,6 +200,25 @@ public class SQLExtracter {
     }
 
     /**
+     * Gets the delimited headers.
+     *
+     * @param metaData the meta data
+     * @return the delimited headers
+     * @throws SQLException the SQL exception
+     */
+    private static String getDelimitedHeaders(ResultSetMetaData metaData) throws SQLException {
+        StringBuilder builder = new StringBuilder();
+        int columns = metaData.getColumnCount();
+        for (int i = 1; i <= columns; i++) {
+            builder.append(metaData.getColumnName(i));
+            if (i < columns) {
+                builder.append("|");
+            }
+        }
+        return builder.toString();
+    }
+
+    /**
      * Gets the delimited line.
      * 
      * @param rs
@@ -201,7 +231,7 @@ public class SQLExtracter {
      * @throws SQLException
      *             the SQL exception
      */
-    private static String getDelimitedLine(ResultSet rs, String delimiter,
+    private static String getDelimitedData(ResultSet rs, String delimiter,
             int columns) throws SQLException {
         StringBuilder builder = new StringBuilder();
         for (int i = 1; i <= columns; i++) {
@@ -298,6 +328,8 @@ public class SQLExtracter {
 
         String split[] = sql.split(delimiter);
 
-        return Arrays.asList(split);
+        Set<String> unique = new HashSet<String>(Arrays.asList(split));
+        
+        return new ArrayList<String>(unique);
     }
 }
