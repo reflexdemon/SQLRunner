@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import net.jmatrix.eproperties.EProperties;
 import net.jmatrix.eproperties.cli.ArgParser;
 
 import org.apache.commons.logging.Log;
@@ -45,19 +46,28 @@ public class QueryExtracter {
     /** */
     public static void main(String[] args) throws Exception {
         Log4JLogConfig.log4jBootstrap();
+        EProperties p = new EProperties();
+
+        
 
         ArgParser ap = new ArgParser(args);
 
-        String url = ap.getStringArg("-c");
-        String user = ap.getStringArg("-u");
-        String pass = ap.getStringArg("-p");
-        String fields = ap.getStringArg("--fields", "*");
-        String output = ap.getStringArg("-o", "/tmp/output.txt");
+        Log4JLogConfig.log4jBootstrap();
+        dryrun = ap.getBooleanArg("--dryrun", dryrun);
+        failonerror = ap.getBooleanArg("-x", failonerror);
+        
+        String config = ap.getLastArg();
+        p.load(config);
+        
+        String url = p.getString("jdbc.url");
+        String user = p.getString("jdbc.user");
+        String pass = p.getString("jdbc.pass");
+        driver = p.getString("jdbc.driver", driver);
+        String fields = p.getString("sql.fields", "*");
+        String output = p.getString("sql.output", "/tmp/output.txt");
 
-        driver = ap.getStringArg("-d", driver);
-
-        String table = ap.getStringArg("-t");// "V_RESOURCE"
-        String condition = ap.getStringArg("-f");// "RESOURCE_KEY IS NOT NULL";
+        String table = p.getString("sql.table");// "V_RESOURCE"
+        String condition = p.getString("sql.condition");// "RESOURCE_KEY IS NOT NULL";
         String mysql = "SELECT " + fields + " from " + table + " WHERE 1=1 "
                 + condition;
 
@@ -169,39 +179,12 @@ public class QueryExtracter {
         for (int i = 1; i <= columns; i++) {
             builder.append(rs.getString(i));
             if (i < columns) {
-                builder.append("|");
+                builder.append(delimiter);
             }
         }
         return builder.toString();
     }
 
-    /**
-     * Gets the IN statement.
-     * 
-     * @param statements
-     *            the statements
-     * @param start
-     *            the start
-     * @param limit
-     *            the limit
-     * @return the IN statement
-     */
-    private static String getINStatement(List<String> statements, int start,
-            int limit) {
-        StringBuilder builder = new StringBuilder();
-        // log.debug("Start:" + start + ", Limit:" + limit);
-        int maxLoop = (start + limit);
-        log.debug("List Count " + (maxLoop - start));
-        builder.append("(");
-        for (int i = start; i < maxLoop; i++) {
-            builder.append("\'").append(statements.get(i).trim()).append("\'");
-            if ((i + 1) != maxLoop) {
-                builder.append(",");
-            }
-        }
-        builder.append(")");
-        return builder.toString();
-    }
 
     static Connection getConnection(String driver, String url, String user,
             String pass) throws SQLException {
@@ -217,7 +200,7 @@ public class QueryExtracter {
         }
     }
 
-    /** */
+
     static String stripSQLComments(String sql) {
         log.debug("SQL before comment removal, length is " + sql.length());
 
