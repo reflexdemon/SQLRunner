@@ -242,7 +242,7 @@ public class SQLExtracter {
         for (int i = 1; i <= columns; i++) {
             builder.append(rs.getString(i));
             if (i < columns) {
-                builder.append("|");
+                builder.append(delimiter);
             }
         }
         return builder.toString();

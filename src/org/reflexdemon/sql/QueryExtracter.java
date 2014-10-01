@@ -4,6 +4,7 @@ import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
@@ -108,6 +109,9 @@ public class QueryExtracter {
 
                     rs = state.executeQuery(statement);
                     int columns = rs.getMetaData().getColumnCount();
+                    String header = getDelimitedHeaders(rs.getMetaData());
+                    System.out.println("Headers:" + header);
+                    builder.append(header).append("\n");
                     rows = 0;
                     while (rs.next()) {
                         rows++;
@@ -185,7 +189,24 @@ public class QueryExtracter {
         return builder.toString();
     }
 
-
+    /**
+     * Gets the delimited headers.
+     *
+     * @param metaData the meta data
+     * @return the delimited headers
+     * @throws SQLException the SQL exception
+     */
+    private static String getDelimitedHeaders(ResultSetMetaData metaData) throws SQLException {
+        StringBuilder builder = new StringBuilder();
+        int columns = metaData.getColumnCount();
+        for (int i = 1; i <= columns; i++) {
+            builder.append(metaData.getColumnName(i));
+            if (i < columns) {
+                builder.append("|");
+            }
+        }
+        return builder.toString();
+    }
     static Connection getConnection(String driver, String url, String user,
             String pass) throws SQLException {
         try {
