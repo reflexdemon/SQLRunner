@@ -63,6 +63,7 @@ public class QueryExtracter {
         String url = p.getString("jdbc.url");
         String user = p.getString("jdbc.user");
         String pass = p.getString("jdbc.pass");
+        String delimiter = p.getString("output.delimiter", "|");
         driver = p.getString("jdbc.driver", driver);
         String fields = p.getString("sql.fields", "*");
         String output = p.getString("sql.output", "/tmp/output.txt");
@@ -109,13 +110,13 @@ public class QueryExtracter {
 
                     rs = state.executeQuery(statement);
                     int columns = rs.getMetaData().getColumnCount();
-                    String header = getDelimitedHeaders(rs.getMetaData());
+                    String header = getDelimitedHeaders(rs.getMetaData(), delimiter);
                     System.out.println("Headers:" + header);
                     builder.append(header).append("\n");
                     rows = 0;
                     while (rs.next()) {
                         rows++;
-                        String line = getDelimitedLine(rs, "|", columns);
+                        String line = getDelimitedLine(rs, delimiter, columns);
 
                         builder.append(line).append("\n");
                     }
@@ -196,13 +197,13 @@ public class QueryExtracter {
      * @return the delimited headers
      * @throws SQLException the SQL exception
      */
-    private static String getDelimitedHeaders(ResultSetMetaData metaData) throws SQLException {
+    private static String getDelimitedHeaders(ResultSetMetaData metaData, String delimiter) throws SQLException {
         StringBuilder builder = new StringBuilder();
         int columns = metaData.getColumnCount();
         for (int i = 1; i <= columns; i++) {
             builder.append(metaData.getColumnName(i));
             if (i < columns) {
-                builder.append("|");
+                builder.append(delimiter);
             }
         }
         return builder.toString();
