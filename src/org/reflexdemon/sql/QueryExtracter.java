@@ -196,10 +196,23 @@ public class QueryExtracter {
      */
     private static String getString(String string) {
         if (null == string) {
-            return null;
+            return "\"\"";
         }
-        String txt = string.replace("\\n", ""); 
-        return txt;
+        StringBuilder builder = new StringBuilder();
+        builder.append("\"");
+        for (char c : string.toCharArray()) {
+            switch(c) {
+                case '\r' :
+                case '\"' :
+                case '\\' :
+                case '\'' :
+                case '\n' : builder.append(" ");
+                            break;
+                default:builder.append(c);
+            }
+        }
+        builder.append("\"");
+        return builder.toString();
     }
 
     /**
