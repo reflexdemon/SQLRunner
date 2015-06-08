@@ -182,12 +182,24 @@ public class QueryExtracter {
             int columns) throws SQLException {
         StringBuilder builder = new StringBuilder();
         for (int i = 1; i <= columns; i++) {
-            builder.append(rs.getString(i));
+            builder.append(getString(rs.getString(i)));
             if (i < columns) {
                 builder.append(delimiter);
             }
         }
         return builder.toString();
+    }
+
+    /**
+     * @param string
+     * @return
+     */
+    private static String getString(String string) {
+        if (null == string) {
+            return null;
+        }
+        String txt = string.replace("\\n", ""); 
+        return txt;
     }
 
     /**
