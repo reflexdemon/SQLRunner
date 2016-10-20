@@ -121,6 +121,37 @@
                     </execution>
                 </executions>
             </plugin>
+
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.2.1</version>
+                <executions>
+                    <execution>
+                        <id>default-cli</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>java</executable>
+                            <!-- optional -->
+                            <workingDirectory>target</workingDirectory>
+                            <arguments>
+                                <argument>-jar</argument>
+                                <argument>SQL-Extracter-1.0.0-jar-with-dependencies.jar</argument>
+                                <argument>-h</argument>
+                                <argument>-cbolw01btst.dev.cbeyond.net</argument>
+                                <argument>-c</argument>
+                                <argument>tail -f /oss/bsimple/logs/cbo10/cbo10-tomcat.log</argument>
+                                <argument>-u</argument>
+                                <argument>vvenkatraman</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
 </project>
