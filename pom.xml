@@ -80,25 +80,6 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
-                <configuration>
-                    <archive>
-                        <index>true</index>
-                        <manifest>
-                            <addClasspath>true</addClasspath>
-                        </manifest>
-                        <manifestEntries>
-                            <Main-Class>${main-class}</Main-Class>
-                            <Project-Name>${app.name} ${app.version}</Project-Name>
-                        </manifestEntries>
-                    </archive>
-                </configuration>
-            </plugin>
-
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>2.2.1</version>
                 <configuration>
@@ -121,7 +102,6 @@
                     </execution>
                 </executions>
             </plugin>
-
 
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
